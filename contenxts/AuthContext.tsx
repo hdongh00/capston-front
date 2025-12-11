@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = () => {
         localStorage.removeItem('capstoneToken');
         setUser(null);
-        history.push("/");
+        history.push("/login");
     }
     const login = (res:AxiosResponse) => {
         localStorage.setItem("capstoneToken", res.data);

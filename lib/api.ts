@@ -10,7 +10,10 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig): InternalAxios
 
 api.interceptors.response.use((res: AxiosResponse) :AxiosResponse => res,
 (err) => {
-
+    console.log("에러다!",err);
+    if(err.response.status===401){
+        window.location.href = "/login";
+    }
 }
 )
 

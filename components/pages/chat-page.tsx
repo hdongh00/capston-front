@@ -3,11 +3,11 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { Send, MessageCircle, Smile, Lightbulb, Settings2 } from "lucide-react"
-import axios from "axios"
+import { Send, MessageCircle, Smile, Lightbulb } from "lucide-react"
 import api from "@/lib/api"
-import { useInView } from 'react-intersection-observer';
-
+import { useInView } from "react-intersection-observer"
+import { useAuth } from "@/contenxts/AuthContext"
+import { useRouter } from "next/navigation"
 interface Message {
   id: string
   text: string
@@ -16,125 +16,145 @@ interface Message {
   emotion?: string
 }
 
-const emotionEmojis: { [key: string]: string } = {
-  happy: "😊",
-  sad: "😢",
-  angry: "😠",
-  anxious: "😰",
-  neutral: "😐",
-  grateful: "🙏",
-  excited: "🤩",
-}
-
-const chatbotModes = [
-  { id: "polite", label: "존댓말", description: "존댓말로 대화합니다" },
-  { id: "casual", label: "반말", description: "편한 반말로 대화합니다" },
+const suggestedTopicsDefault = [
+  "오늘 하루를 말해줄까?",
+  "최근 스트레스가 있어..",
+  "기분이 좋았던 순간이 있어!",
 ]
 
 export default function ChatPage() {
-  const [ref, inView] = useInView();
-  const [page, setPage] = useState(0);
-  const [last, setLast] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      text: '안녕하세요! 저는 심리 상담 AI 봇 "마음 친구"입니다. 오늘 기분은 어떠신가요? 무엇이 당신의 마음을 더 편하게 해줄 수 있을까요?',
-      sender: "ai",
-      timestamp: new Date(),
-    },
-  ])
+  const history = useRouter();
+  const [topRef, inView] = useInView()
+  const [page, setPage] = useState(0)
+  const [last, setLast] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
-  const [chatRoomId, setChatRoomId] = useState(null);
+  const [chatRoomId, setChatRoomId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [suggestedTopics, setSuggestedTopics] = useState<string[]>([
-    "오늘 하루를 말해줄래?",
-    "최근 스트레스가 있어?",
-    "기분이 좋았던 순간이 있어?",
-  ])
-  const [selectedMode, setSelectedMode] = useState("polite")
-  const [showModeSelector, setShowModeSelector] = useState(false)
+  const [suggestedTopics] = useState<string[]>(suggestedTopicsDefault)
+  const [isFetchingPage, setIsFetchingPage] = useState(false)
+  const {isLoggedIn, logout} = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  const hasInitialLoadedRef = useRef(false)
+  const isPrependRef = useRef(false)
+  const prevScrollRef = useRef<{ height: number; top: number } | null>(null)
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior })
   }
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim()) return
+    if(!isLoggedIn) {
+      alert("로그인 후 이용할 수 있습니다.")
+      history.push("/login");
+    }
+    if (!input.trim() || !chatRoomId) return
+    const now = new Date()
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `user-${now.getTime()}`,
       text: input,
       sender: "user",
-      timestamp: new Date()
+      timestamp: now,
     }
 
-    setMessages((prev) => [...prev, userMessage])
+    setMessages(prev => [...prev, userMessage])
     setInput("")
     setIsLoading(true)
-    const res = await api.post("http://localhost:8000/chat", { message: input, convId: chatRoomId });
-    const aiMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      text: res.data,
-      sender: "ai",
-      timestamp: new Date(),
-    }
-    setMessages((prev) => [...prev, aiMessage])
-    setIsLoading(false)
 
+    try {
+      const res = await api.post("http://localhost:8000/chat", {
+        message: userMessage.text,
+        convId: chatRoomId,
+      })
+
+      const aiMessage: Message = {
+        id: `ai-${Date.now()}`,
+        text: res.data,
+        sender: "ai",
+        timestamp: new Date(),
+      }
+
+      setMessages(prev => [...prev, aiMessage])
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleSuggestedTopic = (topic: string) => {
     setInput(topic)
   }
+
   const getChatRoomData = async () => {
-    // const res = await api.post('http://localhost:8080/auth/conversations',{ai:"DEFAULT"});
-    const res2 = await api.get('http://localhost:8080/auth/conversations');
-    setChatRoomId(res2.data[0].id);
+    if(!isLoggedIn) return;
+    await api.post("http://localhost:8080/auth/conversations", { ai: "DEFAULT" })
+    const res2 = await api.get("http://localhost:8080/auth/conversations")
+    setChatRoomId(res2.data[0].id)
   }
+
   const getChatData = async () => {
-    if (!last) {
-      const res = await api.get(`http://localhost:8080/auth/messages?roomId=${chatRoomId}&page=${page}`)
-      setLast(res.data.last);
-      
-      res.data.content.map((d: any, i: number) => {
-        const aiMessage: Message = {
-          id: i.toString(),
-          text: d.content,
-          sender: d.role,
-          timestamp: new Date(
-            d.createdAt[0],
-            d.createdAt[1] - 1,
-            d.createdAt[2],
-            d.createdAt[3],
-            d.createdAt[4],
-            d.createdAt[5],
-            Math.floor(d.createdAt[6] / 1_000_000)
-          )
-        }
-        setMessages((prev) => [...prev, aiMessage]);
-      })
-      setPage(page + 1);
+    if (last || !chatRoomId || isFetchingPage) return
+
+    const container = scrollContainerRef.current
+    if (container && page > 0) {
+      prevScrollRef.current = {
+        height: container.scrollHeight,
+        top: container.scrollTop,
+      }
+      isPrependRef.current = true
+    } else {
+      isPrependRef.current = false
+      prevScrollRef.current = null
     }
 
+    setIsFetchingPage(true)
+    try {
+      const res = await api.get(`http://localhost:8080/auth/messages?roomId=${chatRoomId}&page=${page}`)
+      setLast(res.data.last)
+      const newMessages: Message[] = res.data.content
+        .slice()
+        .reverse()
+        .map((d: any, i: number) => ({
+          id: `${page}-${i}`,
+          text: d.content,
+          sender: d.role,
+          timestamp: new Date(d.createdAt[0],d.createdAt[1] - 1,d.createdAt[2],d.createdAt[3],d.createdAt[4],d.createdAt[5],Math.floor(d.createdAt[6] / 1_000_000),
+          ),
+        }))
+
+      setMessages(prev => [...newMessages, ...prev])
+      setPage(prev => prev + 1)
+    } finally {
+      setIsFetchingPage(false)
+    }
   }
   useEffect(() => {
-    getChatRoomData();
-  }, [])
-  useEffect(() => {
-    if (inView) {
-      console.log("inView 상태");
-      getChatData();
+    const container = scrollContainerRef.current
+    if (!container) return
+    if (messages.length === 0) return
+    if (!hasInitialLoadedRef.current) {
+      hasInitialLoadedRef.current = true
+      scrollToBottom("auto")
+      return
     }
-  }, [inView])
-  useEffect(() => {
-    console.log("page :", page);
-  }, [page])
+    if (isPrependRef.current && prevScrollRef.current) {
+      const { height, top } = prevScrollRef.current
+      const diff = container.scrollHeight - height
+      container.scrollTop = top + diff
+
+      isPrependRef.current = false
+      prevScrollRef.current = null
+      return
+    }
+    scrollToBottom("smooth")
+  }, [messages])
+
+  useEffect(() => {getChatRoomData()}, [])
+  useEffect(() => { inView&&chatRoomId && getChatData();}, [inView, chatRoomId])
+
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-background to-muted/20">
       {/* Header */}
@@ -148,49 +168,25 @@ export default function ChatPage() {
             <p className="text-xs text-muted-foreground">항상 당신의 말을 경청합니다</p>
           </div>
         </div>
-        <div className="relative">
-          <button
-            onClick={() => setShowModeSelector(!showModeSelector)}
-            className="p-2 hover:bg-muted rounded-lg transition-colors"
-            title="챗봇 모드 선택"
-          >
-            <Settings2 className="w-5 h-5 text-primary" />
-          </button>
-
-          {showModeSelector && (
-            <div className="absolute right-0 top-12 bg-card border border-border rounded-lg shadow-lg p-3 w-48 z-50">
-              <p className="text-xs font-medium text-muted-foreground mb-2">챗봇 모드 선택</p>
-              {chatbotModes.map((mode) => (
-                <button
-                  key={mode.id}
-                  onClick={() => {
-                    setSelectedMode(mode.id)
-                    setShowModeSelector(false)
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors text-sm mb-1 ${selectedMode === mode.id
-                    ? "bg-primary/20 text-primary font-medium"
-                    : "hover:bg-muted text-foreground"
-                    }`}
-                >
-                  <p className="font-medium">{mode.label}</p>
-                  <p className="text-xs text-muted-foreground">{mode.description}</p>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 1 && (
+      <div
+        className="flex-1 overflow-y-auto p-4 space-y-4"
+        ref={scrollContainerRef}
+      >
+        {messages.length === 0 && (
           <div className="mt-8 space-y-4">
             <div className="text-center mb-6">
               <div className="inline-block p-4 bg-primary/10 rounded-full mb-3">
                 <Smile className="w-8 h-8 text-primary" />
               </div>
-              <h3 className="font-semibold text-foreground mb-1">당신의 감정을 나누어주세요</h3>
-              <p className="text-sm text-muted-foreground">편안한 환경에서 당신의 마음을 이야기할 수 있습니다</p>
+              <h3 className="font-semibold text-foreground mb-1">
+                당신의 감정을 나누어주세요
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                편안한 환경에서 당신의 마음을 이야기할 수 있습니다
+              </p>
             </div>
 
             <div className="space-y-2 max-w-md mx-auto">
@@ -209,19 +205,29 @@ export default function ChatPage() {
             </div>
           </div>
         )}
-        <div className="bg-black w-200 h-20" ref={ref}></div>
+        <div className="h-6" ref={topRef} />
+
         {messages.map((message, i) => (
-          <div key={i} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
+          <div
+            key={message.id ?? i}
+            className={`flex ${
+              message.sender === "user" ? "justify-end" : "justify-start"
+            }`}
+          >
             <div
-              className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${message.sender === "user"
-                ? "bg-primary text-primary-foreground rounded-br-none shadow-sm"
-                : "bg-card border border-border text-foreground rounded-bl-none shadow-sm"
-                }`}
+              className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                message.sender === "user"
+                  ? "bg-primary text-primary-foreground rounded-br-none shadow-sm"
+                  : "bg-card border border-border text-foreground rounded-bl-none shadow-sm"
+              }`}
             >
               <p className="text-sm leading-relaxed">{message.text}</p>
               <p
-                className={`text-xs mt-2 ${message.sender === "user" ? "text-primary-foreground/70" : "text-muted-foreground"
-                  }`}
+                className={`text-xs mt-2 ${
+                  message.sender === "user"
+                    ? "text-primary-foreground/70"
+                    : "text-muted-foreground"
+                }`}
               >
                 {message.timestamp.toLocaleTimeString("ko-KR", {
                   hour: "2-digit",
@@ -243,6 +249,7 @@ export default function ChatPage() {
             </div>
           </div>
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -252,7 +259,7 @@ export default function ChatPage() {
           <input
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={e => setInput(e.target.value)}
             placeholder="당신의 마음을 나누어주세요..."
             className="flex-1 px-4 py-3 bg-muted border border-border rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all text-sm"
           />

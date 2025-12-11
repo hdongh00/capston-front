@@ -2,9 +2,10 @@
 
 import { MessageCircle, Heart, Leaf } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
-
+  const history = useRouter();
   const handleKakaoLogin = async () => {
     const redirectUri = process.env.NEXT_PUBLIC_REDIRECT_URL;
     const clientId = process.env.NEXT_PUBLIC_KAKAO_APP_KEY;
@@ -65,9 +66,13 @@ export default function LoginPage() {
         <div className="space-y-4">
           <img onClick={handleKakaoLogin} className="cursor-pointer" src="kakao-login.png" />
         </div>
+        <div className="flex items-center justify-center mt-5 bg bg-gradient-to-br from-primary/20 to-secondary/20 p-3 rounded-2xl cursor-pointer"
+        onClick={()=>history.push("/")}>
+          홈으로 돌아가기
+        </div>
 
         {/* Info */}
-        <p className="text-xs text-center text-muted-foreground mt-6">
+        <p className="text-xs text-center text-muted-foreground mt-6 ">
           로그인하면{" "}
           <Link href="#" className="text-primary hover:underline">
             이용약관
