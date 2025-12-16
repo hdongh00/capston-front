@@ -61,10 +61,8 @@ export default function ProfilePage() {
     setProfile(res.data);
   }
   const getGrowthData = async() => {
-    console.log("getGrowthData ㄷㅡㄹㅇㅓㅇㅗㅁ");
     
     const res = await api.get(`/auth/growth`);
-    console.log('sfoksidgfndso',res.data);
     
     setGrowthData(res.data);
   }

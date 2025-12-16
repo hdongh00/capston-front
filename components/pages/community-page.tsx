@@ -17,7 +17,8 @@ import {
   Send,
 } from "lucide-react"
 import api from "@/lib/api"
-
+import { formattedDateTime } from "@/common/function"
+import ReactMarkdown from "react-markdown";
 interface Post {
   id: string
   author: string
@@ -51,7 +52,7 @@ type ForumResponse = {
   emotionName?: string | null
   commentCount?: number | null
   likeCount?: number | null
-  createdAt: string
+  createdAt: number[]
 }
 
 type CommentResponse = {
@@ -61,7 +62,7 @@ type CommentResponse = {
   content: string
   parentCommentId?: number | null
   deleted: boolean
-  createdAt: string
+  createdAt: number[]
 }
 
 const emotionWeatherMap: Record<Post["emotion"], { icon: any; label: string; color: string }> = {
@@ -115,7 +116,7 @@ export default function CommunityPage() {
       id: String(forum.id),
       author: "익명",
       avatar: "👤",
-      date: formatDate(forum.createdAt),
+      date: formattedDateTime(forum.createdAt),
       emotion: emotionKey,
       title: forum.title,
       content: forum.content,
@@ -131,7 +132,7 @@ export default function CommunityPage() {
       id: String(comment.id),
       author: "익명",
       avatar: "👤",
-      date: formatDate(comment.createdAt),
+      date: formattedDateTime(comment.createdAt),
       content: comment.content,
       isOwn: currentUserCode ? comment.userCode === currentUserCode : false,
     }
@@ -362,10 +363,6 @@ export default function CommunityPage() {
                           <span>{post.comments}</span>
                         </button>
                       </div>
-
-                      <button onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 hover:text-primary transition-colors">
-                        <Share2 className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
                 )
@@ -386,7 +383,7 @@ export default function CommunityPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-foreground">{selectedPost.author}</span>
-                        <span className="text-sm text-muted-foreground">{selectedPost.date}</span>
+                        <span className="text-sm text-muted-foreground">{formatDate(selectedPost.date)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-sm text-muted-foreground">감정 상태:</span>
@@ -403,7 +400,7 @@ export default function CommunityPage() {
                 <div className="p-6 space-y-4">
                   <div>
                     <h2 className="text-2xl font-semibold text-foreground mb-3">{selectedPost.title}</h2>
-                    <p className="text-foreground/80 leading-relaxed whitespace-pre-wrap">{selectedPost.content}</p>
+                    <div className="text-foreground/80 leading-relaxed whitespace-pre-wrap">{selectedPost.content}</div>
                   </div>
                 </div>
 
@@ -422,10 +419,6 @@ export default function CommunityPage() {
                       <span className="text-sm">{selectedPost.comments}</span>
                     </button>
                   </div>
-
-                  <button className="flex items-center gap-2 hover:text-primary transition-colors text-muted-foreground">
-                    <Share2 className="w-5 h-5" />
-                  </button>
                 </div>
 
                 <div className="border-t border-border">
